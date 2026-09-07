@@ -7,58 +7,58 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cuidado Alimenticio EA">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#FBFAF6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#12160F" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#FFF1F6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#2B0F1F" media="(prefers-color-scheme: dark)">
 <title>Cuidado Alimenticio EA</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
 
   :root{
-    --bg:#FBFAF6;
+    --bg:#FFF1F6;
     --surface:#FFFFFF;
-    --surface-2:#F2EFE7;
-    --ink:#1E2420;
-    --ink-soft:#4B5148;
-    --muted:#8A8A7C;
-    --line:#E3DFD3;
-    --accent:#1F7A5C;
+    --surface-2:#FDE1EC;
+    --ink:#3A1226;
+    --ink-soft:#8A3B5E;
+    --muted:#C285A3;
+    --line:#F6C9DD;
+    --accent:#E4247E;
     --accent-ink:#FFFFFF;
-    --accent-2:#C6820A;
-    --accent-2-soft:#F4E3C0;
-    --danger:#B3432F;
-    --shadow: 0 1px 2px rgba(30,36,32,0.06), 0 6px 20px rgba(30,36,32,0.06);
+    --accent-2:#FF5B93;
+    --accent-2-soft:#FFDCE9;
+    --danger:#C2185B;
+    --shadow: 0 1px 2px rgba(180,20,90,0.08), 0 6px 20px rgba(180,20,90,0.10);
   }
 
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#12160F;
-      --surface:#191F16;
-      --surface-2:#1F251B;
-      --ink:#EDEEE6;
-      --ink-soft:#C4C7BB;
-      --muted:#8D9385;
-      --line:#2C3327;
-      --accent:#57BF95;
-      --accent-ink:#0D1410;
-      --accent-2:#E0A83A;
-      --accent-2-soft:#3A2F14;
-      --danger:#E17A63;
+      --bg:#2B0F1F;
+      --surface:#3B1529;
+      --surface-2:#48192F;
+      --ink:#FCE3ED;
+      --ink-soft:#F0AFCB;
+      --muted:#C989A8;
+      --line:#5D2140;
+      --accent:#FF6FA8;
+      --accent-ink:#2B0F1F;
+      --accent-2:#FF9BC0;
+      --accent-2-soft:#4C1B34;
+      --danger:#FF8FAE;
       --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
     }
   }
   :root[data-theme="dark"]{
-    --bg:#12160F;
-    --surface:#191F16;
-    --surface-2:#1F251B;
-    --ink:#EDEEE6;
-    --ink-soft:#C4C7BB;
-    --muted:#8D9385;
-    --line:#2C3327;
-    --accent:#57BF95;
-    --accent-ink:#0D1410;
-    --accent-2:#E0A83A;
-    --accent-2-soft:#3A2F14;
-    --danger:#E17A63;
+    --bg:#2B0F1F;
+    --surface:#3B1529;
+    --surface-2:#48192F;
+    --ink:#FCE3ED;
+    --ink-soft:#F0AFCB;
+    --muted:#C989A8;
+    --line:#5D2140;
+    --accent:#FF6FA8;
+    --accent-ink:#2B0F1F;
+    --accent-2:#FF9BC0;
+    --accent-2-soft:#4C1B34;
+    --danger:#FF8FAE;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
   }
 
@@ -408,7 +408,7 @@
   const DEFAULT_PIN = '100010';
   // URL del Cloudflare Worker que calcula las calorías con IA (ver worker.js).
   // Reemplaza esta cadena vacía por la URL del Worker una vez desplegado.
-  const AI_ENDPOINT = '';
+  const AI_ENDPOINT = 'https://cuidado-alimenticio-ia.00004526.workers.dev';
   let adminUnlocked = false;
   try{ if(!localStorage.getItem(PIN_KEY)) localStorage.setItem(PIN_KEY, DEFAULT_PIN); }catch(e){}
 
