@@ -141,8 +141,6 @@
 
   form{ display:flex; flex-direction:column; gap:16px; min-width:0; }
   .field{ min-width:0; }
-  .field-row{ display:flex; gap:12px; min-width:0; }
-  .field-row .field{ flex:1; min-width:0; }
 
   .field label{
     display:block; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
@@ -174,6 +172,21 @@
   .photo-drop .thumb img{ width:100%; height:100%; object-fit:cover; }
   .photo-drop .txt{ font-size:13px; color:var(--ink-soft); flex:1; min-width:0; }
   .photo-drop .txt b{ display:block; color:var(--ink); font-weight:600; font-size:13.5px; }
+  .photo-drop.analyzing{ border-color:var(--accent-2); }
+  .photo-drop.ok{ border-style:solid; border-color:var(--accent); }
+  .photo-drop.err{ border-style:solid; border-color:var(--danger); }
+  .photo-drop .txt .ok-txt{ color:var(--accent); }
+  .photo-drop .txt .err-txt{ color:var(--danger); }
+  .spinner{
+    width:16px; height:16px; border-radius:50%;
+    border:2px solid var(--line); border-top-color:var(--accent-2);
+    animation:spin .8s linear infinite; flex:none;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce){ .spinner{ animation:none; } }
+
+  button.submit:disabled{ opacity:0.45; cursor:not-allowed; }
+  button.submit:disabled:hover{ filter:none; }
 
   .pills{ display:flex; gap:8px; flex-wrap:wrap; }
   .pill{ position:relative; }
@@ -352,7 +365,7 @@
         <label for="photoInput">Foto</label>
         <div class="photo-drop" id="photoDrop">
           <div class="thumb" id="photoThumb">🍽️</div>
-          <div class="txt"><b>Elegir foto</b>opcional, se guarda con la comida</div>
+          <div class="txt"><b id="photoTxtMain">Elegir foto</b><span id="photoTxtSub">obligatoria — la IA calcula las calorías por ti</span></div>
         </div>
         <input type="file" accept="image/*" id="photoInput" hidden>
       </div>
@@ -362,15 +375,9 @@
         <input type="text" id="nameInput" placeholder="Ej. Ensalada de pollo" required>
       </div>
 
-      <div class="field-row">
-        <div class="field">
-          <label for="calInput">Calorías</label>
-          <input type="number" id="calInput" min="0" step="1" placeholder="0" required>
-        </div>
-        <div class="field">
-          <label for="timeInput">Hora</label>
-          <input type="time" id="timeInput" required>
-        </div>
+      <div class="field">
+        <label for="timeInput">Hora</label>
+        <input type="time" id="timeInput" required>
       </div>
 
       <div class="field">
@@ -383,7 +390,7 @@
         </div>
       </div>
 
-      <button type="submit" class="submit">Agregar al registro</button>
+      <button type="submit" class="submit" id="submitBtn" disabled>Agrega una foto para continuar</button>
     </form>
   </div>
 
@@ -399,6 +406,9 @@
   const PIN_KEY = 'cuidado-alimenticio-ea:admin-pin';
   const USER_KEY = 'cuidado-alimenticio-ea:username';
   const DEFAULT_PIN = '100010';
+  // URL del Cloudflare Worker que calcula las calorías con IA (ver worker.js).
+  // Reemplaza esta cadena vacía por la URL del Worker una vez desplegado.
+  const AI_ENDPOINT = '';
   let adminUnlocked = false;
   try{ if(!localStorage.getItem(PIN_KEY)) localStorage.setItem(PIN_KEY, DEFAULT_PIN); }catch(e){}
 
@@ -537,6 +547,76 @@
   const photoInput = document.getElementById('photoInput');
   const photoThumb = document.getElementById('photoThumb');
 
+  const submitBtn = document.getElementById('submitBtn');
+  const photoTxtMain = document.getElementById('photoTxtMain');
+  const photoTxtSub = document.getElementById('photoTxtSub');
+  const nameInput = document.getElementById('nameInput');
+  let aiResult = null; // {calories, foodName, confidence}
+  let analyzing = false;
+
+  function setSubmitState(){
+    submitBtn.disabled = analyzing || !aiResult;
+    submitBtn.textContent = analyzing
+      ? 'Analizando foto…'
+      : aiResult ? 'Agregar al registro' : 'Agrega una foto para continuar';
+  }
+
+  function resetPhotoUI(){
+    photoDrop.classList.remove('analyzing','ok','err');
+    photoThumb.innerHTML = '🍽️';
+    photoTxtMain.textContent = 'Elegir foto';
+    photoTxtSub.innerHTML = 'obligatoria — la IA calcula las calorías por ti';
+  }
+
+  async function analyzePhoto(dataUrl){
+    analyzing = true;
+    aiResult = null;
+    photoDrop.classList.remove('ok','err');
+    photoDrop.classList.add('analyzing');
+    photoTxtMain.textContent = 'Analizando con IA…';
+    photoTxtSub.innerHTML = '<span class="spinner" style="display:inline-block; vertical-align:-2px; margin-right:6px;"></span>Identificando el platillo';
+    setSubmitState();
+
+    if(!AI_ENDPOINT){
+      analyzing = false;
+      photoDrop.classList.remove('analyzing');
+      photoDrop.classList.add('err');
+      photoTxtMain.textContent = 'IA no configurada';
+      photoTxtSub.innerHTML = '<span class="err-txt">Falta conectar el backend de IA (AI_ENDPOINT) en el código.</span>';
+      setSubmitState();
+      return;
+    }
+
+    try{
+      const res = await fetch(AI_ENDPOINT, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ image: dataUrl })
+      });
+      const data = await res.json();
+      if(!res.ok || data.error || !Number.isFinite(data.calories)){
+        throw new Error(data.error || 'Respuesta inválida');
+      }
+      aiResult = { calories: data.calories, foodName: data.foodName || '', confidence: data.confidence || 'media' };
+      photoDrop.classList.remove('analyzing');
+      photoDrop.classList.add('ok');
+      photoTxtMain.textContent = 'Foto analizada';
+      photoTxtSub.innerHTML = '<span class="ok-txt">✓ La IA ya calculó las calorías</span>';
+      if(!nameInput.value.trim() && aiResult.foodName){
+        nameInput.value = aiResult.foodName;
+      }
+    }catch(err){
+      aiResult = null;
+      photoDrop.classList.remove('analyzing');
+      photoDrop.classList.add('err');
+      photoTxtMain.textContent = 'No se pudo analizar';
+      photoTxtSub.innerHTML = '<span class="err-txt">Toca la foto para intentar de nuevo</span>';
+    }finally{
+      analyzing = false;
+      setSubmitState();
+    }
+  }
+
   photoDrop.addEventListener('click', ()=> photoInput.click());
   photoInput.addEventListener('change', ()=>{
     const file = photoInput.files[0];
@@ -545,15 +625,16 @@
     reader.onload = (ev)=>{
       const img = new Image();
       img.onload = ()=>{
-        const maxSize = 240;
+        const maxSize = 320;
         let w = img.width, h = img.height;
         if(w > h){ if(w > maxSize){ h = Math.round(h*maxSize/w); w = maxSize; } }
         else{ if(h > maxSize){ w = Math.round(w*maxSize/h); h = maxSize; } }
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        pendingPhoto = canvas.toDataURL('image/jpeg', 0.75);
+        pendingPhoto = canvas.toDataURL('image/jpeg', 0.8);
         photoThumb.innerHTML = `<img src="${pendingPhoto}" alt="">`;
+        analyzePhoto(pendingPhoto);
       };
       img.src = ev.target.result;
     };
@@ -563,29 +644,29 @@
   document.getElementById('mealForm').addEventListener('submit', (ev)=>{
     ev.preventDefault();
     const user = userInput.value.trim();
-    const name = document.getElementById('nameInput').value.trim();
-    const cal = document.getElementById('calInput').value;
+    const name = nameInput.value.trim();
     const time = document.getElementById('timeInput').value;
     const meal = document.querySelector('input[name="mealType"]:checked').value;
-    if(!user || !name || !time) return;
+    if(!user || !name || !time || !aiResult || !pendingPhoto) return;
 
     try{ localStorage.setItem(USER_KEY, user); }catch(e){}
 
     entries.push({
       id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
       date: todayISO(),
-      time, name, cal: Number(cal)||0, meal, user,
+      time, name, cal: aiResult.calories, meal, user,
       photo: pendingPhoto
     });
     isSeed = false;
     save(entries);
 
-    document.getElementById('nameInput').value = '';
-    document.getElementById('calInput').value = '';
+    nameInput.value = '';
     document.getElementById('timeInput').value = '';
     document.querySelector('input[name="mealType"][value="Desayuno"]').checked = true;
     pendingPhoto = null;
-    photoThumb.innerHTML = '🍽️';
+    aiResult = null;
+    resetPhotoUI();
+    setSubmitState();
 
     render();
   });
