@@ -312,6 +312,17 @@
   }
   .month-total span:last-child{ color:var(--accent-2); font-family:'Space Mono', monospace; }
 
+  .toast{
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
+    max-width:min(90vw, 380px); text-align:center;
+    background:var(--accent); color:var(--accent-ink);
+    padding:14px 20px; border-radius:12px; box-shadow:var(--shadow);
+    font-weight:600; font-size:14px; line-height:1.4; z-index:60;
+    opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce){ .toast{ transition:none; } }
+
   ::selection{ background:var(--accent); color:var(--accent-ink); }
 
   /* ---------- Tablet / phone refinements ---------- */
@@ -342,7 +353,7 @@
 <header class="top">
   <div class="brand">
     <div class="mark">Cuidado <span>Alimenticio</span> EA</div>
-    <div class="tag">Bitácora diaria de comidas y calorías</div>
+    <div class="tag">Bitácora del cuidado de Erikita Arguetin</div>
   </div>
   <div style="display:flex; align-items:center; gap:12px;">
     <div class="tally">
@@ -428,6 +439,7 @@
     <div id="logRoot"></div>
   </div>
 </main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 
 <script>
@@ -439,33 +451,49 @@
   // URL del Cloudflare Worker que calcula las calorías con IA (ver worker.js).
   // Reemplaza esta cadena vacía por la URL del Worker una vez desplegado.
   const AI_ENDPOINT = 'https://cuidado-alimenticio-ia.00004526.workers.dev';
+  const ENTRIES_ENDPOINT = AI_ENDPOINT + '/entries';
+  const POLL_MS = 20000;
   let adminUnlocked = false;
   try{ if(!localStorage.getItem(PIN_KEY)) localStorage.setItem(PIN_KEY, DEFAULT_PIN); }catch(e){}
 
   function todayISO(){ return new Date().toISOString().slice(0,10); }
   function yestISO(){ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); }
 
-  function load(){
+  function loadLocalCache(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
       if(raw) return JSON.parse(raw);
     }catch(e){}
     return null;
   }
-  function save(entries){
+  function cacheLocally(entries){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }catch(e){}
   }
 
-  let entries = load();
-  let isSeed = false;
-  if(!entries){
-    isSeed = true;
-    entries = [
-      {id:'s1', date: todayISO(), time:'07:45', name:'Avena con fruta', cal:320, meal:'Desayuno', photo:null, user:'Ejemplo'},
-      {id:'s2', date: todayISO(), time:'13:15', name:'Pechuga de pollo con arroz', cal:540, meal:'Almuerzo', photo:null, user:'Ejemplo'},
-      {id:'s3', date: yestISO(), time:'20:30', name:'Sopa de verduras', cal:210, meal:'Cena', photo:null, user:'Ejemplo'},
-    ];
+  // Las comidas se guardan en un servidor compartido (Cloudflare KV) para que
+  // todos los que abren este link vean el mismo registro. localStorage solo
+  // se usa como respaldo si no hay conexión con el servidor.
+  async function fetchEntries(){
+    const res = await fetch(ENTRIES_ENDPOINT, { headers: { 'Accept': 'application/json' } });
+    if(!res.ok) throw new Error('No se pudo cargar el registro compartido');
+    const data = await res.json();
+    return data.entries;
   }
+  async function save(entries){
+    cacheLocally(entries);
+    try{
+      await fetch(ENTRIES_ENDPOINT, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entries),
+      });
+    }catch(e){
+      console.warn('No se pudo sincronizar con el servidor compartido, se guardó solo en este dispositivo.', e);
+    }
+  }
+
+  let entries = [];
+  let isSeed = false;
 
   const MEAL_ORDER = {Desayuno:0, Almuerzo:1, Snack:2, Cena:3};
 
@@ -542,8 +570,8 @@
     root.querySelectorAll('.del').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const id = btn.getAttribute('data-id');
-        entries = entries.filter(e=> e.id !== id);
-        isSeed = false;
+        if(isSeed){ entries = []; isSeed = false; }
+        else{ entries = entries.filter(e=> e.id !== id); }
         save(entries);
         render();
       });
@@ -554,6 +582,34 @@
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
   function escapeAttr(s){ return escapeHtml(s); }
+
+  // ---------- Mensajitos al registrar una comida ----------
+  const THANKS_MESSAGES = [
+    'Gracias por cumplir con tu comida gordita te amo miles!!!',
+    'Muy bieeen poppy!',
+    'Crack',
+    'Idola',
+    'Te amo',
+    'Seguí así mi hermosa',
+    'Vas genial',
+    'Provechito te desea el amor de tu vida',
+    'Tengo hambre',
+    'Genia',
+    'Top global',
+    'One direction estaría orgulloso de vos..',
+    'Louis Tomlinson te manda a decir provecho',
+    'Lutteo murió',
+    'Tené un lindo día bonita',
+  ];
+  let toastTimer = null;
+  function showToast(){
+    const el = document.getElementById('toast');
+    const msg = THANKS_MESSAGES[Math.floor(Math.random() * THANKS_MESSAGES.length)];
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> el.classList.remove('show'), 3800);
+  }
 
   // remembered user name
   const userInput = document.getElementById('userInput');
@@ -675,13 +731,13 @@
 
     try{ localStorage.setItem(USER_KEY, user); }catch(e){}
 
+    if(isSeed){ entries = []; isSeed = false; }
     entries.push({
       id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
       date: todayISO(),
       time, name, cal: aiResult.calories, meal, user,
       photo: pendingPhoto
     });
-    isSeed = false;
     save(entries);
 
     nameInput.value = '';
@@ -693,6 +749,7 @@
     setSubmitState();
 
     render();
+    showToast();
   });
 
   // ---------- Admin lock ----------
@@ -828,7 +885,61 @@
   modalPinConfirm.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter') modalOk.click(); });
 
   updateLockBtn();
-  render();
+
+  async function init(){
+    document.getElementById('logRoot').innerHTML = '<div class="empty">Cargando el registro compartido…</div>';
+    let remote = null;
+    let fetchOk = false;
+    try{
+      remote = await fetchEntries();
+      fetchOk = true;
+    }catch(e){
+      console.warn('Sin conexión con el servidor compartido, se usa el respaldo local.', e);
+    }
+
+    if(fetchOk && remote){
+      entries = remote;
+      isSeed = false;
+      cacheLocally(entries);
+    }else if(fetchOk){
+      // El servidor respondió pero aún no hay nada guardado: primera vez.
+      const cached = loadLocalCache();
+      if(cached && cached.length){
+        entries = cached;
+        isSeed = false;
+      }else{
+        isSeed = true;
+        entries = [
+          {id:'s1', date: todayISO(), time:'07:45', name:'Avena con fruta', cal:320, meal:'Desayuno', photo:null, user:'Ejemplo'},
+          {id:'s2', date: todayISO(), time:'13:15', name:'Pechuga de pollo con arroz', cal:540, meal:'Almuerzo', photo:null, user:'Ejemplo'},
+          {id:'s3', date: yestISO(), time:'20:30', name:'Sopa de verduras', cal:210, meal:'Cena', photo:null, user:'Ejemplo'},
+        ];
+      }
+    }else{
+      // No hubo conexión: usa lo último visto en este dispositivo.
+      const cached = loadLocalCache();
+      entries = cached || [];
+      isSeed = false;
+    }
+
+    render();
+
+    // Revisa cada cierto tiempo si alguien más agregó comidas, para que
+    // el registro se mantenga al día sin tener que recargar la página.
+    setInterval(async ()=>{
+      try{
+        const remote = await fetchEntries();
+        if(remote){
+          entries = remote;
+          isSeed = false;
+          cacheLocally(entries);
+          render();
+        }
+      }catch(e){}
+    }, POLL_MS);
+  }
+
+  init();
 })();
 </script>
 </body>
