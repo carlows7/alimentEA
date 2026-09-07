@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cuidado Alimenticio EA">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#FBFAF6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12160F" media="(prefers-color-scheme: dark)">
 <title>Cuidado Alimenticio EA</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
@@ -51,13 +62,20 @@
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
   }
 
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html{ background:var(--bg); }
   body{
     background:var(--bg);
     color:var(--ink);
     font-family:'Work Sans', 'Segoe UI', system-ui, sans-serif;
     font-size:15px;
     line-height:1.5;
+    margin:0;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{ max-width:1360px; margin:0 auto; }
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
   }
   .num{ font-family:'Space Mono', 'SF Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; }
 
@@ -96,9 +114,10 @@
   /* ---------- Layout ---------- */
   main{
     display:grid;
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: 340px minmax(0,1fr);
     gap:0;
     align-items:start;
+    min-width:0;
   }
   @media (max-width: 860px){
     main{ grid-template-columns:1fr; }
@@ -108,8 +127,10 @@
     padding:clamp(18px,3vw,32px);
     border-right:1px solid var(--line);
     position:sticky; top:0;
+    min-width:0;
   }
   @media (max-width:860px){
+    main{ grid-template-columns:minmax(0,1fr); }
     .panel{ position:static; border-right:none; border-bottom:1px solid var(--line); }
   }
 
@@ -118,16 +139,20 @@
     font-size:18px; font-weight:700; margin:0 0 16px;
   }
 
-  form{ display:flex; flex-direction:column; gap:16px; }
+  form{ display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .field{ min-width:0; }
+  .field-row{ display:flex; gap:12px; min-width:0; }
+  .field-row .field{ flex:1; min-width:0; }
 
   .field label{
     display:block; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
     color:var(--muted); font-weight:600; margin-bottom:6px;
   }
+  .field .hint{ font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.4; }
   .field input[type="text"], .field input[type="number"], .field input[type="time"]{
-    width:100%; padding:10px 12px; border-radius:8px;
+    width:100%; padding:12px; border-radius:8px;
     border:1px solid var(--line); background:var(--surface);
-    color:var(--ink); font-family:inherit; font-size:14px;
+    color:var(--ink); font-family:inherit; font-size:16px;
   }
   .field input[type="number"], .field input[type="time"]{ font-family:'Space Mono', monospace; }
   .field input:focus, .photo-drop:focus-within, button:focus-visible, .pill input:focus-visible + span{
@@ -135,7 +160,7 @@
   }
 
   .photo-drop{
-    display:flex; align-items:center; gap:12px;
+    display:flex; align-items:center; gap:12px; min-width:0;
     border:1.5px dashed var(--line); border-radius:10px;
     padding:10px; cursor:pointer; background:var(--surface);
     transition:border-color .15s ease;
@@ -147,7 +172,7 @@
     color:var(--muted); font-size:22px;
   }
   .photo-drop .thumb img{ width:100%; height:100%; object-fit:cover; }
-  .photo-drop .txt{ font-size:13px; color:var(--ink-soft); }
+  .photo-drop .txt{ font-size:13px; color:var(--ink-soft); flex:1; min-width:0; }
   .photo-drop .txt b{ display:block; color:var(--ink); font-weight:600; font-size:13.5px; }
 
   .pills{ display:flex; gap:8px; flex-wrap:wrap; }
@@ -171,7 +196,7 @@
   button.submit:active{ transform:translateY(1px); }
 
   /* ---------- Log ---------- */
-  .log{ padding:clamp(18px,3vw,32px); }
+  .log{ padding:clamp(18px,3vw,32px); min-width:0; }
   .day{ margin-bottom:30px; }
   .day-head{
     display:flex; align-items:baseline; justify-content:space-between;
@@ -196,12 +221,13 @@
   .row .thumb img{ width:100%; height:100%; object-fit:cover; }
   .row .mid{ flex:1; min-width:0; }
   .row .name{ font-weight:600; font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .row .meta{ display:flex; gap:8px; align-items:center; margin-top:3px; }
+  .row .meta{ display:flex; gap:6px 8px; align-items:center; margin-top:3px; flex-wrap:wrap; }
   .row .meal{
     font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;
     padding:2px 8px; border-radius:999px; background:var(--surface-2); color:var(--ink-soft);
   }
   .row .time{ font-size:12.5px; color:var(--muted); }
+  .row .who{ font-size:12.5px; color:var(--muted); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .cal{ font-weight:700; font-size:16px; color:var(--accent-2); flex:none; text-align:right; min-width:64px; }
   .row .cal small{ display:block; font-size:9.5px; font-weight:400; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; }
   .row .del{
@@ -257,8 +283,32 @@
   .modal .actions button.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
 
   ::selection{ background:var(--accent); color:var(--accent-ink); }
-</style>
 
+  /* ---------- Tablet / phone refinements ---------- */
+  @media (max-width: 600px){
+    header.top{ padding-top:20px; padding-bottom:16px; gap:14px; }
+    .tally{ padding:8px 12px; }
+    .tally .value{ font-size:22px; }
+    .lock-btn{ width:44px; height:44px; font-size:17px; }
+    .panel h2{ font-size:16.5px; }
+    .row{ gap:10px; padding:10px; }
+    .row .thumb{ width:44px; height:44px; font-size:17px; }
+    .row .name{ font-size:14px; }
+    .row .cal{ font-size:14.5px; min-width:50px; }
+    .row .del{ width:32px; height:32px; }
+    .pill span{ padding:9px 13px; font-size:13.5px; }
+    .day-head .d{ font-size:13.5px; }
+    button.submit{ padding:14px 18px; font-size:15px; }
+    .modal{ max-width:none; }
+  }
+  @media (hover: none) and (pointer: coarse){
+    .row .del{ width:34px; height:34px; font-size:16px; }
+    .lock-btn{ width:46px; height:46px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
 <header class="top">
   <div class="brand">
     <div class="mark">Cuidado <span>Alimenticio</span> EA</div>
@@ -293,6 +343,12 @@
     <h2>Registrar comida</h2>
     <form id="mealForm">
       <div class="field">
+        <label for="userInput">Tu nombre</label>
+        <input type="text" id="userInput" placeholder="Ej. María" required>
+        <div class="hint">Se recuerda en este dispositivo — no lo vuelves a escribir.</div>
+      </div>
+
+      <div class="field">
         <label for="photoInput">Foto</label>
         <div class="photo-drop" id="photoDrop">
           <div class="thumb" id="photoThumb">🍽️</div>
@@ -306,12 +362,12 @@
         <input type="text" id="nameInput" placeholder="Ej. Ensalada de pollo" required>
       </div>
 
-      <div style="display:flex; gap:12px;">
-        <div class="field" style="flex:1;">
+      <div class="field-row">
+        <div class="field">
           <label for="calInput">Calorías</label>
           <input type="number" id="calInput" min="0" step="1" placeholder="0" required>
         </div>
-        <div class="field" style="flex:1;">
+        <div class="field">
           <label for="timeInput">Hora</label>
           <input type="time" id="timeInput" required>
         </div>
@@ -335,11 +391,13 @@
     <div id="logRoot"></div>
   </div>
 </main>
+</div>
 
 <script>
 (function(){
   const STORAGE_KEY = 'cuidado-alimenticio-ea:entries';
   const PIN_KEY = 'cuidado-alimenticio-ea:admin-pin';
+  const USER_KEY = 'cuidado-alimenticio-ea:username';
   const DEFAULT_PIN = '100010';
   let adminUnlocked = false;
   try{ if(!localStorage.getItem(PIN_KEY)) localStorage.setItem(PIN_KEY, DEFAULT_PIN); }catch(e){}
@@ -363,9 +421,9 @@
   if(!entries){
     isSeed = true;
     entries = [
-      {id:'s1', date: todayISO(), time:'07:45', name:'Avena con fruta', cal:320, meal:'Desayuno', photo:null},
-      {id:'s2', date: todayISO(), time:'13:15', name:'Pechuga de pollo con arroz', cal:540, meal:'Almuerzo', photo:null},
-      {id:'s3', date: yestISO(), time:'20:30', name:'Sopa de verduras', cal:210, meal:'Cena', photo:null},
+      {id:'s1', date: todayISO(), time:'07:45', name:'Avena con fruta', cal:320, meal:'Desayuno', photo:null, user:'Ejemplo'},
+      {id:'s2', date: todayISO(), time:'13:15', name:'Pechuga de pollo con arroz', cal:540, meal:'Almuerzo', photo:null, user:'Ejemplo'},
+      {id:'s3', date: yestISO(), time:'20:30', name:'Sopa de verduras', cal:210, meal:'Cena', photo:null, user:'Ejemplo'},
     ];
   }
 
@@ -424,6 +482,7 @@
             <div class="meta">
               <span class="meal">${e.meal}</span>
               <span class="time num">${e.time}</span>
+              <span class="who">· ${escapeHtml(e.user || 'Anónimo')}</span>
             </div>
           </div>
           <div class="cal num${adminUnlocked ? '' : ' cal-hidden'}">${adminUnlocked ? (Number(e.cal)||0) : '•••'}<small>kcal</small></div>
@@ -462,6 +521,16 @@
   }
   function escapeAttr(s){ return escapeHtml(s); }
 
+  // remembered user name
+  const userInput = document.getElementById('userInput');
+  try{
+    const savedName = localStorage.getItem(USER_KEY);
+    if(savedName) userInput.value = savedName;
+  }catch(e){}
+  userInput.addEventListener('change', ()=>{
+    try{ localStorage.setItem(USER_KEY, userInput.value.trim()); }catch(e){}
+  });
+
   // photo upload with resize
   let pendingPhoto = null;
   const photoDrop = document.getElementById('photoDrop');
@@ -493,22 +562,27 @@
 
   document.getElementById('mealForm').addEventListener('submit', (ev)=>{
     ev.preventDefault();
+    const user = userInput.value.trim();
     const name = document.getElementById('nameInput').value.trim();
     const cal = document.getElementById('calInput').value;
     const time = document.getElementById('timeInput').value;
     const meal = document.querySelector('input[name="mealType"]:checked').value;
-    if(!name || !time) return;
+    if(!user || !name || !time) return;
+
+    try{ localStorage.setItem(USER_KEY, user); }catch(e){}
 
     entries.push({
       id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
       date: todayISO(),
-      time, name, cal: Number(cal)||0, meal,
+      time, name, cal: Number(cal)||0, meal, user,
       photo: pendingPhoto
     });
     isSeed = false;
     save(entries);
 
-    ev.target.reset();
+    document.getElementById('nameInput').value = '';
+    document.getElementById('calInput').value = '';
+    document.getElementById('timeInput').value = '';
     document.querySelector('input[name="mealType"][value="Desayuno"]').checked = true;
     pendingPhoto = null;
     photoThumb.innerHTML = '🍽️';
@@ -600,3 +674,5 @@
   render();
 })();
 </script>
+</body>
+</html>
