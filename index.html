@@ -456,8 +456,13 @@
   let adminUnlocked = false;
   try{ if(!localStorage.getItem(PIN_KEY)) localStorage.setItem(PIN_KEY, DEFAULT_PIN); }catch(e){}
 
-  function todayISO(){ return new Date().toISOString().slice(0,10); }
-  function yestISO(){ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); }
+  // Usa la fecha LOCAL del dispositivo (no UTC), para que el día no cambie
+  // horas antes o después de la medianoche real de quien usa la app.
+  function dateToISO(d){
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function todayISO(){ return dateToISO(new Date()); }
+  function yestISO(){ const d=new Date(); d.setDate(d.getDate()-1); return dateToISO(d); }
 
   function loadLocalCache(){
     try{
