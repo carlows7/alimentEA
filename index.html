@@ -484,6 +484,19 @@
     const data = await res.json();
     return data.entries;
   }
+
+  // Sube la foto a su propia llave en el servidor y devuelve solo un id
+  // corto — así el registro de comidas nunca crece por el peso de las fotos.
+  async function uploadPhoto(dataUrl){
+    const res = await fetch(AI_ENDPOINT + '/photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl }),
+    });
+    if(!res.ok) throw new Error('No se pudo subir la foto');
+    const data = await res.json();
+    return data.id;
+  }
   async function save(entries){
     cacheLocally(entries);
     try{
@@ -495,6 +508,25 @@
     }catch(e){
       console.warn('No se pudo sincronizar con el servidor compartido, se guardó solo en este dispositivo.', e);
     }
+  }
+
+  // Antes de aplicar un cambio (agregar/borrar), vuelve a traer lo más
+  // reciente del servidor y aplica el cambio sobre eso — así, si alguien más
+  // agregó algo desde otro dispositivo en los últimos segundos, no se pierde.
+  async function mutateEntries(mutator){
+    let current = entries;
+    try{
+      const fresh = await fetchEntries();
+      if(fresh) current = fresh;
+    }catch(e){
+      console.warn('No se pudo confirmar el registro más reciente antes de guardar, se usa lo que había en pantalla.', e);
+    }
+    const updated = mutator(current);
+    entries = updated;
+    isSeed = false;
+    render();
+    await save(updated);
+    return updated;
   }
 
   let entries = [];
@@ -509,6 +541,15 @@
   }
   function mealIcon(meal){
     return {Desayuno:'☀️', Almuerzo:'🍲', Cena:'🌙', Snack:'🍎'}[meal] || '🍽️';
+  }
+
+  // Las fotos nuevas se guardan aparte y la comida solo trae su id; las
+  // fotos de comidas viejas quedaron embebidas directo como data URL.
+  // Esto muestra cualquiera de las dos formas sin romper nada.
+  function photoSrc(e){
+    if(!e.photo) return null;
+    if(e.photo.startsWith('data:')) return e.photo;
+    return `${AI_ENDPOINT}/photos/${e.photo}`;
   }
 
   function render(){
@@ -551,7 +592,7 @@
         const row = document.createElement('div');
         row.className = 'row';
         row.innerHTML = `
-          <div class="thumb">${e.photo ? `<img src="${e.photo}" alt="${escapeAttr(e.name)}">` : mealIcon(e.meal)}</div>
+          <div class="thumb">${photoSrc(e) ? `<img src="${photoSrc(e)}" alt="${escapeAttr(e.name)}" loading="lazy">` : mealIcon(e.meal)}</div>
           <div class="mid">
             <div class="name">${escapeHtml(e.name)}</div>
             <div class="meta">
@@ -575,10 +616,13 @@
     root.querySelectorAll('.del').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const id = btn.getAttribute('data-id');
-        if(isSeed){ entries = []; isSeed = false; }
-        else{ entries = entries.filter(e=> e.id !== id); }
-        save(entries);
-        render();
+        if(isSeed){
+          entries = [];
+          isSeed = false;
+          render();
+          return;
+        }
+        mutateEntries(current => current.filter(e=> e.id !== id));
       });
     });
   }
@@ -726,7 +770,7 @@
     reader.readAsDataURL(file);
   });
 
-  document.getElementById('mealForm').addEventListener('submit', (ev)=>{
+  document.getElementById('mealForm').addEventListener('submit', async (ev)=>{
     ev.preventDefault();
     const user = userInput.value.trim();
     const name = nameInput.value.trim();
@@ -736,14 +780,13 @@
 
     try{ localStorage.setItem(USER_KEY, user); }catch(e){}
 
-    if(isSeed){ entries = []; isSeed = false; }
-    entries.push({
+    const photoToUpload = pendingPhoto;
+    const newEntry = {
       id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
       date: todayISO(),
       time, name, cal: aiResult.calories, meal, user,
-      photo: pendingPhoto
-    });
-    save(entries);
+      photo: photoToUpload // respaldo: si falla la subida, queda embebida
+    };
 
     nameInput.value = '';
     document.getElementById('timeInput').value = '';
@@ -752,9 +795,19 @@
     aiResult = null;
     resetPhotoUI();
     setSubmitState();
-
-    render();
     showToast();
+
+    // Sube la foto aparte para no inflar el registro compartido; si falla,
+    // la comida se guarda igual con la foto embebida como respaldo.
+    try{
+      newEntry.photo = await uploadPhoto(photoToUpload);
+    }catch(e){
+      console.warn('No se pudo subir la foto por separado, se guarda embebida.', e);
+    }
+
+    // Trae lo más reciente del servidor antes de agregar, para no pisar
+    // comidas que alguien más haya registrado desde otro dispositivo.
+    await mutateEntries(current => [...current, newEntry]);
   });
 
   // ---------- Admin lock ----------
