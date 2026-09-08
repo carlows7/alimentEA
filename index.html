@@ -312,6 +312,47 @@
   }
   .month-total span:last-child{ color:var(--accent-2); font-family:'Space Mono', monospace; }
 
+  .history-modal{ max-width:380px; }
+  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-nav button{
+    width:32px; height:32px; border-radius:8px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--ink-soft); font-size:15px; cursor:pointer;
+  }
+  .cal-nav button:disabled{ opacity:0.35; cursor:default; }
+  .cal-label{ font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; }
+  .cal-weekdays, .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
+  .cal-weekdays{ margin-bottom:4px; }
+  .cal-weekdays span{ text-align:center; font-size:10.5px; color:var(--muted); font-weight:600; }
+  .cal-cell{
+    position:relative; aspect-ratio:1; display:flex; align-items:center; justify-content:center;
+    border-radius:8px; font-size:12.5px; color:var(--ink-soft); background:var(--surface-2);
+    border:1px solid transparent; cursor:default;
+  }
+  .cal-cell.pad{ background:transparent; }
+  .cal-cell.in-range{ cursor:pointer; }
+  .cal-cell.in-range:hover{ border-color:var(--accent); }
+  .cal-cell.has-entries{ font-weight:700; color:var(--ink); }
+  .cal-cell.has-entries::after{
+    content:''; position:absolute; bottom:4px; width:4px; height:4px; border-radius:50%;
+    background:var(--accent-2);
+  }
+  .cal-cell.selected{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .cal-cell.selected::after{ background:var(--accent-ink); }
+  .cal-cell.today{ box-shadow:inset 0 0 0 1px var(--accent); }
+  .cal-day-detail{ margin-top:14px; }
+  .cal-day-label{ font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; margin:0 0 8px; }
+  .cal-day-list{ display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; }
+  .cal-day-row{
+    display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; background:var(--surface-2);
+    font-size:13px;
+  }
+  .cal-day-row .icon{ font-size:15px; }
+  .cal-day-row .txt{ flex:1; min-width:0; }
+  .cal-day-row .n{ color:var(--ink); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cal-day-row .m{ color:var(--muted); font-size:11.5px; }
+  .cal-day-row .t{ color:var(--muted); font-family:'Space Mono', monospace; font-size:11.5px; }
+  .cal-day-empty{ text-align:center; padding:18px 10px; color:var(--muted); font-size:13px; }
+
   .toast{
     position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
     max-width:min(90vw, 380px); text-align:center;
@@ -361,6 +402,7 @@
       <div class="value num" id="todayTotal">•••</div>
       <div class="unit">kcal</div>
     </div>
+    <button class="lock-btn" id="historyBtn" title="Historial de comidas">🗂️</button>
     <button class="lock-btn" id="monthBtn" title="Resumen mensual">📅</button>
     <button class="lock-btn" id="lockBtn" title="Modo administrador">🔒</button>
   </div>
@@ -374,6 +416,26 @@
     <div class="month-total" id="monthTotal"></div>
     <div class="actions">
       <button type="button" id="monthClose">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="historyOverlay" hidden>
+  <div class="modal history-modal">
+    <h3>Historial de comidas</h3>
+    <p>Explora los días registrados desde el inicio. No se muestran calorías aquí.</p>
+    <div class="cal-nav">
+      <button type="button" id="calPrev" aria-label="Mes anterior">‹</button>
+      <div id="calLabel" class="cal-label"></div>
+      <button type="button" id="calNext" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="cal-weekdays">
+      <span>D</span><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-day-detail" id="calDayDetail"></div>
+    <div class="actions">
+      <button type="button" id="historyClose">Cerrar</button>
     </div>
   </div>
 </div>
@@ -905,6 +967,125 @@
   });
   monthClose.addEventListener('click', closeMonthSummary);
   monthOverlay.addEventListener('click', (ev)=>{ if(ev.target === monthOverlay) closeMonthSummary(); });
+
+  // Historial de comidas: un calendario público (sin PIN) que arranca en el
+  // primer día registrado y llega hasta hoy. Solo muestra qué se comió cada
+  // día — nunca calorías — así que no necesita el modo administrador.
+  const historyBtn = document.getElementById('historyBtn');
+  const historyOverlay = document.getElementById('historyOverlay');
+  const historyClose = document.getElementById('historyClose');
+  const calPrev = document.getElementById('calPrev');
+  const calNext = document.getElementById('calNext');
+  const calLabel = document.getElementById('calLabel');
+  const calGrid = document.getElementById('calGrid');
+  const calDayDetail = document.getElementById('calDayDetail');
+  const CAL_MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  let calYear = 0, calMonth = 0, calSelected = '';
+
+  function realEntries(){
+    return isSeed ? [] : entries;
+  }
+  function firstEntryDate(){
+    const dates = realEntries().map(e=> e.date).filter(Boolean).sort();
+    return dates.length ? dates[0] : todayISO();
+  }
+  function entriesForDate(iso){
+    return realEntries()
+      .filter(e=> e.date === iso)
+      .sort((a,b)=>{
+        const ma = MEAL_ORDER[a.meal] ?? 9, mb = MEAL_ORDER[b.meal] ?? 9;
+        if(a.time !== b.time) return a.time.localeCompare(b.time);
+        return ma - mb;
+      });
+  }
+  function renderCalDayDetail(){
+    if(!calSelected){
+      calDayDetail.innerHTML = '';
+      return;
+    }
+    const list = entriesForDate(calSelected);
+    const label = fmtDate(calSelected);
+    if(list.length === 0){
+      calDayDetail.innerHTML = `<p class="cal-day-label">${label}</p><div class="cal-day-empty">No hay comidas registradas este día.</div>`;
+      return;
+    }
+    calDayDetail.innerHTML = `
+      <p class="cal-day-label">${label}</p>
+      <div class="cal-day-list">
+        ${list.map(e=> `
+          <div class="cal-day-row">
+            <span class="icon">${mealIcon(e.meal)}</span>
+            <span class="txt"><span class="n">${escapeHtml(e.name)}</span><br><span class="m">${escapeHtml(e.meal)}</span></span>
+            <span class="t">${escapeHtml(e.time)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  function renderCalendar(){
+    const first = firstEntryDate();
+    const [fy, fm] = first.split('-').map(Number);
+    const today = new Date();
+    const ty = today.getFullYear(), tm = today.getMonth();
+    const todayIso = todayISO();
+
+    calLabel.textContent = `${CAL_MONTH_NAMES[calMonth]} ${calYear}`;
+    calPrev.disabled = (calYear < fy) || (calYear === fy && calMonth <= fm - 1);
+    calNext.disabled = (calYear > ty) || (calYear === ty && calMonth >= tm);
+
+    const entryDates = new Set(realEntries().map(e=> e.date));
+    const firstWeekday = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+
+    let html = '';
+    for(let i=0; i<firstWeekday; i++){
+      html += `<div class="cal-cell pad"></div>`;
+    }
+    for(let day=1; day<=daysInMonth; day++){
+      const iso = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const inRange = iso >= first && iso <= todayIso;
+      const hasEntries = entryDates.has(iso);
+      const classes = ['cal-cell'];
+      if(inRange) classes.push('in-range');
+      if(hasEntries) classes.push('has-entries');
+      if(iso === todayIso) classes.push('today');
+      if(iso === calSelected) classes.push('selected');
+      html += `<div class="${classes.join(' ')}" ${inRange ? `data-date="${iso}"` : ''}>${day}</div>`;
+    }
+    calGrid.innerHTML = html;
+
+    calGrid.querySelectorAll('.cal-cell.in-range').forEach(cell=>{
+      cell.addEventListener('click', ()=>{
+        calSelected = cell.getAttribute('data-date');
+        renderCalendar();
+        renderCalDayDetail();
+      });
+    });
+    renderCalDayDetail();
+  }
+  function openHistory(){
+    const today = new Date();
+    calYear = today.getFullYear();
+    calMonth = today.getMonth();
+    calSelected = todayISO();
+    renderCalendar();
+    historyOverlay.hidden = false;
+  }
+  function closeHistory(){ historyOverlay.hidden = true; }
+
+  historyBtn.addEventListener('click', openHistory);
+  historyClose.addEventListener('click', closeHistory);
+  historyOverlay.addEventListener('click', (ev)=>{ if(ev.target === historyOverlay) closeHistory(); });
+  calPrev.addEventListener('click', ()=>{
+    calMonth--;
+    if(calMonth < 0){ calMonth = 11; calYear--; }
+    renderCalendar();
+  });
+  calNext.addEventListener('click', ()=>{
+    calMonth++;
+    if(calMonth > 11){ calMonth = 0; calYear++; }
+    renderCalendar();
+  });
 
   modalCancel.addEventListener('click', closeModal);
   overlay.addEventListener('click', (ev)=>{ if(ev.target === overlay) closeModal(); });
