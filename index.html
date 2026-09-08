@@ -340,17 +340,26 @@
   .cal-cell.selected::after{ background:var(--accent-ink); }
   .cal-cell.today{ box-shadow:inset 0 0 0 1px var(--accent); }
   .cal-day-detail{ margin-top:14px; }
-  .cal-day-label{ font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; margin:0 0 8px; }
-  .cal-day-list{ display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; }
+  .cal-day-label{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; margin:0 0 8px;
+  }
+  .cal-day-total{ color:var(--accent-2); font-family:'Space Mono', monospace; text-transform:none; letter-spacing:0; }
+  .cal-day-list{ display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; }
   .cal-day-row{
-    display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; background:var(--surface-2);
+    display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--surface-2);
     font-size:13px;
   }
-  .cal-day-row .icon{ font-size:15px; }
+  .cal-day-row .thumb{
+    width:38px; height:38px; border-radius:8px; overflow:hidden; flex:none;
+    background:var(--surface); display:flex; align-items:center; justify-content:center;
+    font-size:16px; color:var(--muted);
+  }
+  .cal-day-row .thumb img{ width:100%; height:100%; object-fit:cover; }
   .cal-day-row .txt{ flex:1; min-width:0; }
   .cal-day-row .n{ color:var(--ink); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .cal-day-row .m{ color:var(--muted); font-size:11.5px; }
-  .cal-day-row .t{ color:var(--muted); font-family:'Space Mono', monospace; font-size:11.5px; }
+  .cal-day-row .t{ color:var(--muted); font-family:'Space Mono', monospace; font-size:11.5px; text-align:right; line-height:1.5; }
   .cal-day-empty{ text-align:center; padding:18px 10px; color:var(--muted); font-size:13px; }
 
   .toast{
@@ -423,7 +432,7 @@
 <div class="modal-overlay" id="historyOverlay" hidden>
   <div class="modal history-modal">
     <h3>Historial de comidas</h3>
-    <p>Explora los días registrados desde el inicio. No se muestran calorías aquí.</p>
+    <p id="historyDesc">Explora los días registrados desde el inicio.</p>
     <div class="cal-nav">
       <button type="button" id="calPrev" aria-label="Mes anterior">‹</button>
       <div id="calLabel" class="cal-label"></div>
@@ -922,6 +931,7 @@
       adminUnlocked = false;
       updateLockBtn();
       render();
+      if(!historyOverlay.hidden) renderCalDayDetail();
     }else{
       openModal();
     }
@@ -979,6 +989,7 @@
   const calLabel = document.getElementById('calLabel');
   const calGrid = document.getElementById('calGrid');
   const calDayDetail = document.getElementById('calDayDetail');
+  const historyDesc = document.getElementById('historyDesc');
   const CAL_MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   let calYear = 0, calMonth = 0, calSelected = '';
 
@@ -999,24 +1010,32 @@
       });
   }
   function renderCalDayDetail(){
+    historyDesc.textContent = adminUnlocked
+      ? 'Explora los días registrados desde el inicio. Como administrador, ves también el total de calorías de cada día.'
+      : 'Explora los días registrados desde el inicio. No se muestran calorías aquí.';
     if(!calSelected){
       calDayDetail.innerHTML = '';
       return;
     }
     const list = entriesForDate(calSelected);
     const label = fmtDate(calSelected);
+    // El total de calorías del día solo se muestra si el admin ya desbloqueó
+    // con su PIN — el resto del calendario nunca expone calorías.
+    const totalTag = adminUnlocked
+      ? `<span class="cal-day-total">${list.reduce((s,e)=> s + (Number(e.cal)||0), 0)} kcal</span>`
+      : '';
     if(list.length === 0){
-      calDayDetail.innerHTML = `<p class="cal-day-label">${label}</p><div class="cal-day-empty">No hay comidas registradas este día.</div>`;
+      calDayDetail.innerHTML = `<p class="cal-day-label">${label}${totalTag}</p><div class="cal-day-empty">No hay comidas registradas este día.</div>`;
       return;
     }
     calDayDetail.innerHTML = `
-      <p class="cal-day-label">${label}</p>
+      <p class="cal-day-label">${label}${totalTag}</p>
       <div class="cal-day-list">
         ${list.map(e=> `
           <div class="cal-day-row">
-            <span class="icon">${mealIcon(e.meal)}</span>
+            <span class="thumb">${photoSrc(e) ? `<img src="${photoSrc(e)}" alt="${escapeAttr(e.name)}" loading="lazy">` : mealIcon(e.meal)}</span>
             <span class="txt"><span class="n">${escapeHtml(e.name)}</span><br><span class="m">${escapeHtml(e.meal)}</span></span>
-            <span class="t">${escapeHtml(e.time)}</span>
+            <span class="t">${escapeHtml(e.time)}${adminUnlocked ? `<br>${Number(e.cal)||0} kcal` : ''}</span>
           </div>
         `).join('')}
       </div>
@@ -1114,6 +1133,7 @@
     updateLockBtn();
     closeModal();
     render();
+    if(!historyOverlay.hidden) renderCalDayDetail();
     if(modalOnSuccess){
       const cb = modalOnSuccess;
       modalOnSuccess = null;
