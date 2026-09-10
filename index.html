@@ -566,6 +566,10 @@
     });
     if(!res.ok) throw new Error('No se pudo subir la foto');
     const data = await res.json();
+    // Si el servidor todavía no tiene el endpoint /photos (o responde algo
+    // inesperado) no hay "id" — hay que fallar aquí para que quede la foto
+    // embebida de respaldo, en vez de guardar un id vacío que rompe la imagen.
+    if(!data || !data.id) throw new Error('Respuesta de /photos sin id');
     return data.id;
   }
   async function save(entries){
