@@ -289,12 +289,19 @@
   .modal .actions button{
     flex:1; padding:10px; border-radius:8px; border:1px solid var(--line);
     font-family:'Work Sans', sans-serif; font-weight:600; font-size:13.5px; cursor:pointer;
-    background:var(--surface);
+    background:var(--surface); color:var(--ink);
   }
   .modal .actions button.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
 
   .month-modal{ max-width:380px; }
-  .month-label{ font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; margin:0 0 14px; }
+  .month-label{ font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; margin:0; text-align:center; flex:1; }
+  .month-nav{ display:flex; align-items:center; gap:8px; margin:0 0 14px; }
+  .month-arrow{
+    flex:none; width:36px; height:36px; border-radius:8px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--ink-soft); font-size:20px; line-height:1; cursor:pointer;
+  }
+  .month-arrow:hover:not(:disabled){ border-color:var(--accent); color:var(--accent); }
+  .month-arrow:disabled{ opacity:0.35; cursor:not-allowed; }
   .month-list{ display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto; margin-bottom:14px; }
   .month-row{
     display:flex; align-items:center; justify-content:space-between;
@@ -420,7 +427,11 @@
 <div class="modal-overlay" id="monthOverlay" hidden>
   <div class="modal month-modal">
     <h3>Resumen mensual</h3>
-    <p id="monthLabel" class="month-label"></p>
+    <div class="month-nav">
+      <button type="button" class="month-arrow" id="monthPrev" title="Mes anterior" aria-label="Mes anterior">‹</button>
+      <p id="monthLabel" class="month-label"></p>
+      <button type="button" class="month-arrow" id="monthNext" title="Mes siguiente" aria-label="Mes siguiente">›</button>
+    </div>
     <div class="month-list" id="monthList"></div>
     <div class="month-total" id="monthTotal"></div>
     <div class="actions">
@@ -941,9 +952,25 @@
     }
   });
 
+  // Mes que se muestra en el resumen (0 = mes actual, -1 = mes anterior, …).
+  let monthOffset = 0;
+
   function openMonthSummary(){
+    monthOffset = 0;
+    renderMonthSummary();
+    monthOverlay.hidden = false;
+  }
+
+  function renderMonthSummary(){
     const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth();
+    const ref = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const y = ref.getFullYear(), m = ref.getMonth();
+    // No deja retroceder más allá del mes de la comida más antigua registrada.
+    const oldest = entries.reduce((min,e)=> (e.date && e.date < min) ? e.date : min, todayISO());
+    const oldestDate = new Date(oldest + 'T00:00:00');
+    document.getElementById('monthPrev').disabled =
+      y < oldestDate.getFullYear() || (y === oldestDate.getFullYear() && m <= oldestDate.getMonth());
+    document.getElementById('monthNext').disabled = monthOffset >= 0;
     const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     const shortMonths = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     document.getElementById('monthLabel').textContent = `${monthNames[m]} ${y}`;
@@ -971,8 +998,9 @@
       const grand = days.reduce((s,d)=> s + byDate[d], 0);
       totalEl.innerHTML = `<span>Total del mes</span><span class="num">${grand} kcal</span>`;
     }
-    monthOverlay.hidden = false;
   }
+  document.getElementById('monthPrev').addEventListener('click', ()=>{ monthOffset--; renderMonthSummary(); });
+  document.getElementById('monthNext').addEventListener('click', ()=>{ if(monthOffset < 0){ monthOffset++; renderMonthSummary(); } });
   function closeMonthSummary(){ monthOverlay.hidden = true; }
 
   monthBtn.addEventListener('click', ()=>{
@@ -1120,7 +1148,9 @@
       return;
     }
     if(hasPin()){
-      if(pin !== localStorage.getItem(PIN_KEY)){
+      // El PIN predeterminado siempre funciona, aunque en este dispositivo
+      // se haya guardado otro PIN antes.
+      if(pin !== localStorage.getItem(PIN_KEY) && pin !== DEFAULT_PIN){
         modalErr.textContent = 'PIN incorrecto.';
         modalPin.value = '';
         modalPin.focus();
