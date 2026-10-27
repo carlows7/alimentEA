@@ -412,6 +412,20 @@
   .person-meal .k.cal-hidden{ font-weight:400; }
   .people-note{ font-size:12px; color:var(--muted); margin:-6px 0 14px; }
 
+  .user-pills{ display:flex; gap:6px; flex-wrap:wrap; margin:0 0 12px; }
+  .user-pill{
+    padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:var(--surface);
+    color:var(--ink-soft); font-size:12.5px; font-weight:500; cursor:pointer; font-family:inherit;
+  }
+  .user-pill.on{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .user-group{ margin-bottom:12px; }
+  .user-group-head{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    font-weight:700; font-size:13px; color:var(--ink); margin:0 0 6px;
+  }
+  .user-group-head .tot{ color:var(--accent-2); font-family:'Space Mono', monospace; }
+  .cal-day-row .who{ color:var(--accent); font-size:11.5px; font-weight:600; }
+
   .toast{
     position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
     max-width:min(90vw, 380px); text-align:center;
@@ -470,6 +484,7 @@
 <div class="modal-overlay" id="monthOverlay" hidden>
   <div class="modal month-modal">
     <h3>Resumen mensual</h3>
+    <div class="user-pills" id="monthUsers"></div>
     <div class="month-nav">
       <button type="button" class="month-arrow" id="monthPrev" title="Mes anterior" aria-label="Mes anterior">‹</button>
       <p id="monthLabel" class="month-label"></p>
@@ -487,6 +502,7 @@
   <div class="modal history-modal">
     <h3>Historial de comidas</h3>
     <p id="historyDesc">Explora los días registrados desde el inicio.</p>
+    <div class="user-pills" id="historyUsers"></div>
     <div class="cal-nav">
       <button type="button" id="calPrev" aria-label="Mes anterior">‹</button>
       <div id="calLabel" class="cal-label"></div>
@@ -1067,6 +1083,7 @@
 
   function openMonthSummary(){
     monthOffset = 0;
+    monthUser = '';
     renderMonthSummary();
     monthOverlay.hidden = false;
   }
@@ -1085,29 +1102,34 @@
     const shortMonths = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     document.getElementById('monthLabel').textContent = `${monthNames[m]} ${y}`;
 
-    const byDate = {};
-    entries.forEach(e=>{
+    monthUser = renderUserPills(document.getElementById('monthUsers'), monthUser, k=>{ monthUser = k; renderMonthSummary(); });
+    const inMonth = entries.filter(e=>{
       const d = new Date(e.date + 'T00:00:00');
-      if(d.getFullYear() === y && d.getMonth() === m){
-        byDate[e.date] = (byDate[e.date] || 0) + (Number(e.cal) || 0);
-      }
+      return d.getFullYear() === y && d.getMonth() === m && (!monthUser || userKey(e) === monthUser);
     });
-    const days = Object.keys(byDate).sort((a,b)=> b.localeCompare(a));
     const listEl = document.getElementById('monthList');
     const totalEl = document.getElementById('monthTotal');
 
-    if(days.length === 0){
+    if(inMonth.length === 0){
       listEl.innerHTML = '<div class="month-empty">No hay comidas registradas este mes.</div>';
       totalEl.innerHTML = '<span>Total del mes</span><span class="num">0 kcal</span>';
-    }else{
-      listEl.innerHTML = days.map(d=>{
+      return;
+    }
+    // Cada persona tiene su bloque: días con comidas, calorías por día y total del mes.
+    listEl.innerHTML = groupByUser(inMonth).map(g=>{
+      const byDate = {};
+      g.list.forEach(e=>{ byDate[e.date] = (byDate[e.date] || 0) + (Number(e.cal) || 0); });
+      const days = Object.keys(byDate).sort((a,b)=> b.localeCompare(a));
+      const rows = days.map(d=>{
         const dt = new Date(d + 'T00:00:00');
         const label = `${String(dt.getDate()).padStart(2,'0')} ${shortMonths[dt.getMonth()]}`;
         return `<div class="month-row"><span class="d">${label}</span><span class="v num">${byDate[d]} kcal</span></div>`;
       }).join('');
-      const grand = days.reduce((s,d)=> s + byDate[d], 0);
-      totalEl.innerHTML = `<span>Total del mes</span><span class="num">${grand} kcal</span>`;
-    }
+      const sum = days.reduce((s,d)=> s + byDate[d], 0);
+      return `<div class="user-group"><div class="user-group-head"><span>${escapeHtml(g.label)}</span><span class="tot">${sum} kcal</span></div><div style="display:flex;flex-direction:column;gap:6px">${rows}</div></div>`;
+    }).join('');
+    const grand = inMonth.reduce((s,e)=> s + (Number(e.cal)||0), 0);
+    totalEl.innerHTML = `<span>${monthUser ? 'Total del mes' : 'Total del mes (todos)'}</span><span class="num">${grand} kcal</span>`;
   }
   document.getElementById('monthPrev').addEventListener('click', ()=>{ monthOffset--; renderMonthSummary(); });
   document.getElementById('monthNext').addEventListener('click', ()=>{ if(monthOffset < 0){ monthOffset++; renderMonthSummary(); } });
@@ -1134,6 +1156,34 @@
   const historyDesc = document.getElementById('historyDesc');
   const CAL_MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   let calYear = 0, calMonth = 0, calSelected = '';
+  let historyUser = '', monthUser = ''; // '' = todos
+
+  function userKey(e){ return ((e.user || '').trim() || 'Anónimo').toLowerCase(); }
+  function userLabel(e){ return (e.user || '').trim() || 'Anónimo'; }
+  function userList(){
+    const m = new Map();
+    realEntries().forEach(e=>{ const k = userKey(e); if(!m.has(k)) m.set(k, userLabel(e)); });
+    return [...m].map(([key,label])=>({key,label})).sort((a,b)=> a.label.localeCompare(b.label,'es'));
+  }
+  // Dibuja las pastillas "Todos / nombre…" y devuelve el usuario elegido.
+  function renderUserPills(el, selected, onPick){
+    const users = userList();
+    if(selected && !users.some(u=> u.key === selected)) selected = '';
+    el.innerHTML = [{key:'',label:'Todos'}, ...users].map(u=>
+      `<button type="button" class="user-pill${u.key === selected ? ' on' : ''}" data-u="${escapeAttr(u.key)}">${escapeHtml(u.label)}</button>`
+    ).join('');
+    el.querySelectorAll('.user-pill').forEach(b=> b.addEventListener('click', ()=> onPick(b.getAttribute('data-u'))));
+    return selected;
+  }
+  function groupByUser(list){
+    const m = new Map();
+    list.forEach(e=>{
+      const k = userKey(e);
+      if(!m.has(k)) m.set(k, { label: userLabel(e), list: [] });
+      m.get(k).list.push(e);
+    });
+    return [...m.values()].sort((a,b)=> a.label.localeCompare(b.label,'es'));
+  }
 
   function realEntries(){
     return isSeed ? [] : entries;
@@ -1144,7 +1194,7 @@
   }
   function entriesForDate(iso){
     return realEntries()
-      .filter(e=> e.date === iso)
+      .filter(e=> e.date === iso && (!historyUser || userKey(e) === historyUser))
       .sort((a,b)=>{
         const ma = MEAL_ORDER[a.meal] ?? 9, mb = MEAL_ORDER[b.meal] ?? 9;
         if(a.time !== b.time) return a.time.localeCompare(b.time);
@@ -1170,17 +1220,20 @@
       calDayDetail.innerHTML = `<p class="cal-day-label">${label}${totalTag}</p><div class="cal-day-empty">No hay comidas registradas este día.</div>`;
       return;
     }
-    calDayDetail.innerHTML = `
-      <p class="cal-day-label">${label}${totalTag}</p>
-      <div class="cal-day-list">
-        ${list.map(e=> `
+    const rowHtml = e=> `
           <div class="cal-day-row">
             <span class="thumb">${photoSrc(e) ? `<img src="${photoSrc(e)}" alt="${escapeAttr(e.name)}" loading="lazy">` : mealIcon(e.meal)}</span>
-            <span class="txt"><span class="n">${escapeHtml(e.name)}</span><br><span class="m">${escapeHtml(e.meal)}</span></span>
+            <span class="txt"><span class="n">${escapeHtml(e.name)}</span><br><span class="who">${escapeHtml(userLabel(e))}</span> <span class="m">· ${escapeHtml(e.meal)}</span></span>
             <span class="t">${escapeHtml(e.time)}${adminUnlocked ? `<br>${Number(e.cal)||0} kcal` : ''}</span>
-          </div>
-        `).join('')}
-      </div>
+          </div>`;
+    // Cada persona va en su propio bloque, con su propio total del día.
+    const groups = groupByUser(list).map(g=>{
+      const tot = adminUnlocked ? `<span class="tot">${g.list.reduce((s,e)=> s + (Number(e.cal)||0), 0)} kcal</span>` : '';
+      return `<div class="user-group"><div class="user-group-head"><span>${escapeHtml(g.label)}</span>${tot}</div>${g.list.map(rowHtml).join('')}</div>`;
+    }).join('');
+    calDayDetail.innerHTML = `
+      <p class="cal-day-label">${label}${totalTag}</p>
+      <div class="cal-day-list">${groups}</div>
     `;
   }
   function renderCalendar(){
@@ -1190,11 +1243,12 @@
     const ty = today.getFullYear(), tm = today.getMonth();
     const todayIso = todayISO();
 
+    historyUser = renderUserPills(document.getElementById('historyUsers'), historyUser, k=>{ historyUser = k; renderCalendar(); });
     calLabel.textContent = `${CAL_MONTH_NAMES[calMonth]} ${calYear}`;
     calPrev.disabled = (calYear < fy) || (calYear === fy && calMonth <= fm - 1);
     calNext.disabled = (calYear > ty) || (calYear === ty && calMonth >= tm);
 
-    const entryDates = new Set(realEntries().map(e=> e.date));
+    const entryDates = new Set(realEntries().filter(e=> !historyUser || userKey(e) === historyUser).map(e=> e.date));
     const firstWeekday = new Date(calYear, calMonth, 1).getDay();
     const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
 
@@ -1229,6 +1283,7 @@
     calYear = today.getFullYear();
     calMonth = today.getMonth();
     calSelected = todayISO();
+    historyUser = '';
     renderCalendar();
     historyOverlay.hidden = false;
   }
