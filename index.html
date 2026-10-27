@@ -870,7 +870,9 @@
   function escapeAttr(s){ return escapeHtml(s); }
 
   // ---------- Mensajitos al registrar una comida ----------
-  const THANKS_MESSAGES = [
+  // Mensajes de Erika (los de siempre) y mensajes de Michelle (nuevos).
+  // Se elige la lista según el nombre de quien registra la comida.
+  const MESSAGES_ERIKA = [
     'Gracias por cumplir con tu comida gordita te amo miles!!!',
     'Muy bieeen poppy!',
     'Crack',
@@ -887,10 +889,38 @@
     'Lutteo murió',
     'Tené un lindo día bonita',
   ];
+  const MESSAGES_MICHELLE = [
+    'Vamos, por Rochy',
+    'Eso es todo Michelin',
+    'Vamos Michelada',
+    'Muy bieeen Michy',
+    'Seguí así Michel',
+    'La Erika te odia',
+    'Luis te ama',
+    'Daleeee crack',
+    'Vamos broo',
+    'Eso es todo genia',
+    'Top global',
+    '¡Tú puedes!',
+    'Tú puedes con todo, Michy',
+    'Un paso a la vez, vas increíble',
+    'Cada comida cuenta, sigue así',
+    'Estás haciendo un gran trabajo',
+    'Orgullosa de ti, no te rindas',
+    'Hoy también lo lograste',
+    'Constancia, Michy, constancia',
+    'Cuidarte es quererte, vamos',
+    'Lo estás logrando, sigue',
+    'Eres más fuerte de lo que crees',
+  ];
+  function messagesFor(user){
+    return /erik/i.test(user || '') ? MESSAGES_ERIKA : MESSAGES_MICHELLE;
+  }
   let toastTimer = null;
-  function showToast(){
+  function showToast(user){
     const el = document.getElementById('toast');
-    const msg = THANKS_MESSAGES[Math.floor(Math.random() * THANKS_MESSAGES.length)];
+    const list = messagesFor(user);
+    const msg = list[Math.floor(Math.random() * list.length)];
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(toastTimer);
@@ -1032,7 +1062,7 @@
     aiResult = null;
     resetPhotoUI();
     setSubmitState();
-    showToast();
+    showToast(user);
 
     // Sube la foto aparte para no inflar el registro compartido; si falla,
     // la comida se guarda igual con la foto embebida como respaldo.
