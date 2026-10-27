@@ -601,14 +601,16 @@
   const STORAGE_KEY = 'cuidado-alimenticio-ea:entries';
   const PIN_KEY = 'cuidado-alimenticio-ea:admin-pin';
   const USER_KEY = 'cuidado-alimenticio-ea:username';
-  const DEFAULT_PIN = '100010';
+  const DEFAULT_PIN = '0011';
+  const OLD_DEFAULT_PIN = '100010';
   // URL del Cloudflare Worker que calcula las calorías con IA (ver worker.js).
   // Reemplaza esta cadena vacía por la URL del Worker una vez desplegado.
   const AI_ENDPOINT = 'https://cuidado-alimenticio-ia.00004526.workers.dev';
   const ENTRIES_ENDPOINT = AI_ENDPOINT + '/entries';
   const POLL_MS = 20000;
   let adminUnlocked = false;
-  try{ if(!localStorage.getItem(PIN_KEY)) localStorage.setItem(PIN_KEY, DEFAULT_PIN); }catch(e){}
+  // Si el dispositivo aún tenía guardado el PIN anterior, se reemplaza por el nuevo.
+  try{ const cur = localStorage.getItem(PIN_KEY); if(!cur || cur === OLD_DEFAULT_PIN) localStorage.setItem(PIN_KEY, DEFAULT_PIN); }catch(e){}
 
   // Usa la fecha LOCAL del dispositivo (no UTC), para que el día no cambie
   // horas antes o después de la medianoche real de quien usa la app.
