@@ -412,12 +412,18 @@
   .person-meal .k.cal-hidden{ font-weight:400; }
   .people-note{ font-size:12px; color:var(--muted); margin:-6px 0 14px; }
 
-  .user-pills{ display:flex; gap:6px; flex-wrap:wrap; margin:0 0 12px; }
+  .user-pick-label{ font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 6px; }
+  .user-pills{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
   .user-pill{
-    padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:var(--surface);
-    color:var(--ink-soft); font-size:12.5px; font-weight:500; cursor:pointer; font-family:inherit;
+    padding:9px 16px; border-radius:999px; border:1.5px solid var(--line); background:var(--surface);
+    color:var(--ink-soft); font-size:14px; font-weight:500; cursor:pointer; font-family:inherit;
   }
   .user-pill.on{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .month-thumbs{ display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
+  .month-thumbs span{ width:30px; height:30px; border-radius:6px; overflow:hidden; background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .month-thumbs img{ width:100%; height:100%; object-fit:cover; }
+  .month-row.has-thumbs{ flex-wrap:wrap; }
+  .month-row.has-thumbs .month-thumbs{ flex-basis:100%; }
   .user-group{ margin-bottom:12px; }
   .user-group-head{
     display:flex; align-items:center; justify-content:space-between; gap:8px;
@@ -484,6 +490,7 @@
 <div class="modal-overlay" id="monthOverlay" hidden>
   <div class="modal month-modal">
     <h3>Resumen mensual</h3>
+    <div class="user-pick-label">¿De quién quieres ver el consumo?</div>
     <div class="user-pills" id="monthUsers"></div>
     <div class="month-nav">
       <button type="button" class="month-arrow" id="monthPrev" title="Mes anterior" aria-label="Mes anterior">‹</button>
@@ -502,6 +509,7 @@
   <div class="modal history-modal">
     <h3>Historial de comidas</h3>
     <p id="historyDesc">Explora los días registrados desde el inicio.</p>
+    <div class="user-pick-label">¿De quién quieres ver el consumo?</div>
     <div class="user-pills" id="historyUsers"></div>
     <div class="cal-nav">
       <button type="button" id="calPrev" aria-label="Mes anterior">‹</button>
@@ -1083,7 +1091,7 @@
 
   function openMonthSummary(){
     monthOffset = 0;
-    monthUser = '';
+    monthUser = null;
     renderMonthSummary();
     monthOverlay.hidden = false;
   }
@@ -1102,6 +1110,7 @@
     const shortMonths = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     document.getElementById('monthLabel').textContent = `${monthNames[m]} ${y}`;
 
+    if(monthUser === null) monthUser = (userList()[0] || {key:''}).key;
     monthUser = renderUserPills(document.getElementById('monthUsers'), monthUser, k=>{ monthUser = k; renderMonthSummary(); });
     const inMonth = entries.filter(e=>{
       const d = new Date(e.date + 'T00:00:00');
@@ -1123,7 +1132,9 @@
       const rows = days.map(d=>{
         const dt = new Date(d + 'T00:00:00');
         const label = `${String(dt.getDate()).padStart(2,'0')} ${shortMonths[dt.getMonth()]}`;
-        return `<div class="month-row"><span class="d">${label}</span><span class="v num">${byDate[d]} kcal</span></div>`;
+        const thumbs = g.list.filter(e=> e.date === d).sort((a,b)=> a.time.localeCompare(b.time))
+          .map(e=> `<span title="${escapeAttr(e.name)}">${photoSrc(e) ? `<img src="${photoSrc(e)}" alt="${escapeAttr(e.name)}" loading="lazy">` : mealIcon(e.meal)}</span>`).join('');
+        return `<div class="month-row has-thumbs"><span class="d">${label}</span><span class="v num">${byDate[d]} kcal</span><div class="month-thumbs">${thumbs}</div></div>`;
       }).join('');
       const sum = days.reduce((s,d)=> s + byDate[d], 0);
       return `<div class="user-group"><div class="user-group-head"><span>${escapeHtml(g.label)}</span><span class="tot">${sum} kcal</span></div><div style="display:flex;flex-direction:column;gap:6px">${rows}</div></div>`;
@@ -1156,7 +1167,7 @@
   const historyDesc = document.getElementById('historyDesc');
   const CAL_MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   let calYear = 0, calMonth = 0, calSelected = '';
-  let historyUser = '', monthUser = ''; // '' = todos
+  let historyUser = '', monthUser = ''; // '' = todos; null = elegir el primero al abrir
 
   function userKey(e){ return ((e.user || '').trim() || 'Anónimo').toLowerCase(); }
   function userLabel(e){ return (e.user || '').trim() || 'Anónimo'; }
@@ -1243,6 +1254,7 @@
     const ty = today.getFullYear(), tm = today.getMonth();
     const todayIso = todayISO();
 
+    if(historyUser === null) historyUser = (userList()[0] || {key:''}).key;
     historyUser = renderUserPills(document.getElementById('historyUsers'), historyUser, k=>{ historyUser = k; renderCalendar(); });
     calLabel.textContent = `${CAL_MONTH_NAMES[calMonth]} ${calYear}`;
     calPrev.disabled = (calYear < fy) || (calYear === fy && calMonth <= fm - 1);
@@ -1283,7 +1295,7 @@
     calYear = today.getFullYear();
     calMonth = today.getMonth();
     calSelected = todayISO();
-    historyUser = '';
+    historyUser = null;
     renderCalendar();
     historyOverlay.hidden = false;
   }
