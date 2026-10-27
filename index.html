@@ -369,6 +369,49 @@
   .cal-day-row .t{ color:var(--muted); font-family:'Space Mono', monospace; font-size:11.5px; text-align:right; line-height:1.5; }
   .cal-day-empty{ text-align:center; padding:18px 10px; color:var(--muted); font-size:13px; }
 
+
+  /* ---------- Por persona ---------- */
+  .people{ margin-top:36px; }
+  .people-head{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:14px;
+  }
+  .people-head h2{ font-family:'Bricolage Grotesque', sans-serif; font-size:15px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; margin:0; }
+  .people-head input[type="date"]{
+    padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--surface);
+    color:var(--ink); font-family:'Space Mono', monospace; font-size:13px;
+  }
+  .people-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+  .person{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:14px; box-shadow:var(--shadow); min-width:0;
+  }
+  .person-top{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .avatar{
+    width:36px; height:36px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+    background:var(--accent-2-soft); color:var(--accent); font-weight:700; font-size:15px;
+    font-family:'Bricolage Grotesque', sans-serif;
+  }
+  .person-name{ flex:1; min-width:0; font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .person-total{ flex:none; text-align:right; font-weight:700; font-size:17px; color:var(--accent-2); }
+  .person-total small{ display:block; font-size:9.5px; font-weight:400; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; }
+  .person-meals{ display:flex; flex-direction:column; gap:6px; }
+  .person-meal{
+    display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:8px;
+    background:var(--surface-2); font-size:13px;
+  }
+  .person-meal .thumb{
+    width:34px; height:34px; border-radius:7px; overflow:hidden; flex:none;
+    background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:15px; color:var(--muted);
+  }
+  .person-meal .thumb img{ width:100%; height:100%; object-fit:cover; }
+  .person-meal .txt{ flex:1; min-width:0; }
+  .person-meal .n{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .person-meal .m{ color:var(--muted); font-size:11.5px; }
+  .person-meal .k{ flex:none; font-family:'Space Mono', monospace; font-size:12.5px; font-weight:700; color:var(--accent-2); }
+  .person-meal .k.cal-hidden{ font-weight:400; }
+  .people-note{ font-size:12px; color:var(--muted); margin:-6px 0 14px; }
+
   .toast{
     position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
     max-width:min(90vw, 380px); text-align:center;
@@ -617,6 +660,7 @@
 
   let entries = [];
   let isSeed = false;
+  let peopleDate = '';
 
   const MEAL_ORDER = {Desayuno:0, Almuerzo:1, Snack:2, Cena:3};
 
@@ -696,6 +740,8 @@
       root.appendChild(day);
     }
 
+    renderPeople(root);
+
     const todayTotal = list.reduce((s,e)=> s+(Number(e.cal)||0), 0);
     document.getElementById('todayTotal').textContent = adminUnlocked ? todayTotal : '•••';
 
@@ -710,6 +756,70 @@
         }
         mutateEntries(current => current.filter(e=> e.id !== id));
       });
+    });
+  }
+
+  // Sección "Por persona": cada usuario tiene su propio total y sus propias
+  // comidas del día elegido. Se agrupa por nombre sin distinguir mayúsculas.
+  function renderPeople(root){
+    const today = todayISO();
+    if(!peopleDate || peopleDate > today) peopleDate = today;
+    const dates = entries.map(e=> e.date).filter(Boolean).sort();
+    const minDate = (!isSeed && dates.length) ? dates[0] : today;
+
+    const groups = new Map();
+    entries.filter(e=> e.date === peopleDate).forEach(e=>{
+      const label = (e.user || '').trim() || 'Anónimo';
+      const key = label.toLowerCase();
+      if(!groups.has(key)) groups.set(key, { label, list: [] });
+      groups.get(key).list.push(e);
+    });
+    const people = [...groups.values()].sort((a,b)=> a.label.localeCompare(b.label, 'es'));
+
+    const sec = document.createElement('section');
+    sec.className = 'people';
+    sec.innerHTML = `
+      <div class="people-head">
+        <h2>Por persona · ${fmtDate(peopleDate)}</h2>
+        <input type="date" id="peopleDate" value="${peopleDate}" min="${minDate}" max="${today}" aria-label="Día">
+      </div>
+      ${adminUnlocked ? '' : '<div class="people-note">Las calorías de cada persona se ven con el modo administrador 🔒.</div>'}
+      <div class="people-grid"></div>
+    `;
+    const grid = sec.querySelector('.people-grid');
+    if(people.length === 0){
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">Nadie registró comidas este día.</div>';
+    }
+    people.forEach(p=>{
+      p.list.sort((a,b)=>{
+        const ma = MEAL_ORDER[a.meal] ?? 9, mb = MEAL_ORDER[b.meal] ?? 9;
+        if(a.time !== b.time) return a.time.localeCompare(b.time);
+        return ma - mb;
+      });
+      const total = p.list.reduce((s,e)=> s+(Number(e.cal)||0), 0);
+      const card = document.createElement('div');
+      card.className = 'person';
+      card.innerHTML = `
+        <div class="person-top">
+          <div class="avatar">${escapeHtml(p.label.charAt(0).toUpperCase())}</div>
+          <div class="person-name">${escapeHtml(p.label)}</div>
+          <div class="person-total num${adminUnlocked ? '' : ' cal-hidden'}">${adminUnlocked ? total : '•••'}<small>kcal hoy</small></div>
+        </div>
+        <div class="person-meals">
+          ${p.list.map(e=> `
+            <div class="person-meal">
+              <span class="thumb">${photoSrc(e) ? `<img src="${photoSrc(e)}" alt="${escapeAttr(e.name)}" loading="lazy">` : mealIcon(e.meal)}</span>
+              <span class="txt"><div class="n">${escapeHtml(e.name)}</div><div class="m">${escapeHtml(e.meal)} · ${escapeHtml(e.time)}</div></span>
+              <span class="k${adminUnlocked ? '' : ' cal-hidden'}">${adminUnlocked ? (Number(e.cal)||0) + ' kcal' : '•••'}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+    root.appendChild(sec);
+    sec.querySelector('#peopleDate').addEventListener('change', ev=>{
+      if(ev.target.value){ peopleDate = ev.target.value; render(); }
     });
   }
 
